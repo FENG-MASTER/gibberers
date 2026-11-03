@@ -69,3 +69,9 @@ const customSave=saved();await click('undo');await click('confirm-undo');assert.
 await element('import-file').emit('change',{target:{files:[{size:5000,text:async()=>JSON.stringify({format:'gibberers-save',version:1,game:customSave})}],value:'file'}});
 await click('confirm-import');assert.equal(saved().stage,'application');assert.match(html(),/&lt;萤火虫&gt;/);
 console.log('自定义知识交互通过：私密填写、隐藏、复看、奖励、历史、撤销和存档恢复。');
+await click('home');assert.match(html(),/<option value="10"/);
+await element('app').emit('change',{target:{id:'player-count',value:'10'}});
+assert.match(element('players').innerHTML,/name="player9"/);
+await element('app').emit('submit',{target:{id:'setup',values:{count:'10',timer:'0',civilization:'十人桌'}},preventDefault(){}});
+await click('confirm-new');assert.equal(saved().players.length,10);assert.match(html(),/玩家 10/);
+console.log('十人开局交互通过：人数选项、十个座次输入与创建对局。');

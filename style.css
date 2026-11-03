@@ -5,3 +5,4 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 [hidden]{display:none!important}
 textarea{width:100%;resize:vertical;border:1px solid #d7dace;border-radius:7px;background:#fffef9;padding:12px;color:var(--ink);font:inherit;line-height:1.7}textarea:focus-visible{outline:3px solid var(--gold);outline-offset:3px}.custom-types{border:0;padding:0;margin:22px 0}.custom-types legend{font-size:13px;color:var(--muted);margin-bottom:12px}.type-choice{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;margin:0 8px 8px 0;border:1px solid var(--line);border-radius:7px;cursor:pointer}.type-choice:has(input:checked){background:#e8eddf;border-color:#9ba990}.type-choice input{accent-color:var(--ink);width:17px;height:17px}.type-choice .type-mark{margin:0}
+.game-header>div:first-child{min-width:0;overflow-wrap:anywhere}.mentor-badge{max-width:40%;overflow-wrap:anywhere}

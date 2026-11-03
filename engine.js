@@ -1,3 +1,4 @@
+export const MIN_PLAYERS = 3, MAX_PLAYERS = 10;
 export const TYPES = ['日常', '概念', '武力', '科学', '奇迹'];
 export const LIMITS = [4, 5, 3, 2, 1];
 export const HINTS = [
@@ -11,7 +12,7 @@ export function shuffle(items, random = Math.random) {
   return a;
 }
 export function createGame(name, players, cards, minutes = 0) {
-  if (!Array.isArray(players) || players.length < 3 || players.length > 5 || players.some(p => typeof p !== 'string' || !p.trim() || p.length > 30)) throw Error('请输入 3～5 位玩家，每个姓名不超过 30 字。');
+  if (!Array.isArray(players) || players.length < MIN_PLAYERS || players.length > MAX_PLAYERS || players.some(p => typeof p !== 'string' || !p.trim() || p.length > 30)) throw Error('请输入 3～10 位玩家，每个姓名不超过 30 字。');
   return {version: 1, name: name.trim() || '未命名文明', players, created: new Date().toISOString(), stage: 'foundation', baseCount: 0, essentials: [false,false,false,false], mentor: 0, generation: 1, round: 1, used: [0,0,0,0,0], decks: [1,2,3,4,5].map(g => shuffle(cards.filter(c => c.generation === g).map(c => c.id))), tokens: 0, earned: [0,0,0,0,0], spent: [0,0,0,0,0], minutes, turn: null, log: [], rewards: 0};
 }
 function requireState(condition, message = '当前阶段不能进行此操作。') { if (!condition) throw Error(message); }
@@ -122,7 +123,7 @@ export function validateGame(s, cards) {
   const bools = (a,n) => Array.isArray(a) && a.length === n && a.every(x => typeof x === 'boolean');
   const stages = ['foundation','encounter','prepare','ready','enlighten','answer','application','finished'];
   requireState(s && s.version === 1 && typeof s.name === 'string' && s.name.length <= 60 && typeof s.created === 'string' && !Number.isNaN(Date.parse(s.created)), '存档格式或版本不正确。');
-  requireState(Array.isArray(s.players) && int(s.players.length,3,5) && s.players.every(p => typeof p === 'string' && p.trim() && p.length <= 30), '存档玩家信息不正确。');
+  requireState(Array.isArray(s.players) && int(s.players.length,MIN_PLAYERS,MAX_PLAYERS) && s.players.every(p => typeof p === 'string' && p.trim() && p.length <= 30), '存档玩家信息不正确。');
   requireState(stages.includes(s.stage) && int(s.mentor,0,s.players.length-1) && int(s.generation,1,5) && int(s.round,1,15) && int(s.tokens,0,5) && int(s.baseCount,0,18) && bools(s.essentials,4) && int(s.minutes,0,120) && int(s.rewards,0,100), '存档进度不正确。');
   requireState(five(s.used,5) && s.used.every((v,i) => v <= LIMITS[i]) && five(s.earned,100) && five(s.spent,100) && s.spent.every((v,i) => v <= s.earned[i]), '存档标记不正确。');
   requireState(Array.isArray(s.decks) && s.decks.length === 5 && s.decks.every((deck,i) => Array.isArray(deck) && new Set(deck).size === deck.length && deck.every(id => cards.some(c => c.id === id && c.generation === i+1))), '存档牌库不正确。');
