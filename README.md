@@ -2,6 +2,8 @@
 
 供 3～5 人面对面游玩的纯前端辅助工具。共用一台手机或平板，造词、读音和公共词典保留在纸上。没有账号、房间、后端或第三方运行时依赖。
 
+站点地址（GitHub Pages 完成发布后）：<https://feng-master.github.io/gibberers/>。
+
 ## 本地预览
 
 在此目录执行：
@@ -23,7 +25,7 @@ python -m http.server 8000
 
 也可用从分支部署的方式：选择含 `index.html` 的分支根目录。不过这种方式会一并发布仓库中的文档文件，推荐使用上面的 Actions。
 
-当前工作区尚未关联可用 Git 仓库；创建这些文件不会自动发布网站。
+项目仓库：<https://github.com/FENG-MASTER/gibberers>。首次使用需要在仓库 Pages 设置中选择 GitHub Actions；以后推送 `main` 会自动测试和发布。
 
 ## 已实现
 
