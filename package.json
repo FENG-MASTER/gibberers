@@ -1,0 +1,9 @@
+{
+  "name": "gibberers-table-companion",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/engine.test.js && node tests/ui.test.js",
+    "start": "python -m http.server 8000"
+  }
+}

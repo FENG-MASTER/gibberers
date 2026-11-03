@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#203c33"><meta name="description" content="语言大爆炸线下桌游助手。纸笔造词，面对面交流；离线抽卡、管理标记和文明结算。">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml"><link rel="manifest" href="./manifest.webmanifest"><link rel="stylesheet" href="./style.css">
+  <title>语言大爆炸 · 桌边助手</title>
+</head>
+<body>
+  <header class="site-header"><a class="brand" href="./" aria-label="语言大爆炸首页"><img src="./assets/icon.svg" alt="" width="38" height="38"><span>语言大爆炸<small>GIBBERERS · 桌边助手</small></span></a><div class="status"><i id="offline-dot"></i><span id="offline-status">本机运行</span></div></header>
+  <main id="app"><div class="loading">正在准备文明的第一句话……</div></main>
+  <footer>一起创造语言，也一起创造文明。<span>专家规则 · Excel v3 牌库</span></footer>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="modal"><div id="modal-content"></div><button class="button secondary modal-close" id="modal-close">关闭</button></dialog>
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
+  <noscript>此工具需要启用 JavaScript；所有游戏操作在当前设备执行。</noscript>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
