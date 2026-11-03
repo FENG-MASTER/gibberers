@@ -1,9 +1,9 @@
-import {TYPES, LIMITS, HINTS, createGame, transition, score, validateGame} from './engine.js';
+import {TYPES, LIMITS, HINTS, createGame, transition, score, validateGame, gameCards} from './engine.js';
 const $ = s => document.querySelector(s);
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const COLORS = ['#b68a4b','#68839d','#ac6250','#678561','#947697'];
 const KEY = 'gibberers-v1', TIMER_KEY = 'gibberers-timer-v1';
-let cards, game = null, undo = [], privateView = false, home = true, storageError = '', timer = null, toastTimeout, imageIndex = 1;
+let cards, game = null, undo = [], privateView = false, customEditor = false, home = true, storageError = '', timer = null, toastTimeout, imageIndex = 1;
 const button = (text, action, secondary = false, disabled = false, extra = '') => `<button class="button ${secondary?'secondary':''}" data-action="${action}" ${disabled?'disabled':''} ${extra}>${text}</button>`;
 function toast(text) { $('#toast').textContent = text; $('#toast').classList.add('visible'); clearTimeout(toastTimeout); toastTimeout = setTimeout(() => $('#toast').classList.remove('visible'),4500); }
 function modal(html, closeText = '关闭') { $('#modal-content').innerHTML = html; $('#modal-close').textContent = closeText; if (!$('#modal').open) $('#modal').showModal(); }
@@ -19,11 +19,11 @@ function run(action) {
   try {
     const next = transition(game,action,cards);
     undo.push(structuredClone(game)); if (undo.length > 40) undo.shift();
-    game = next; privateView = false;
+    game = next; privateView = false; customEditor = false;
     if (action.type === 'enlighten' && game.minutes > 0) { timer = {round:game.round,created:game.created,deadline:Date.now()+game.minutes*60000,remaining:game.minutes*60000}; saveTimer(); }
     if (['application','finished'].includes(game.stage)) resetTimer();
     save(); render();
-    if (['start','next','select'].includes(action.type)) window.scrollTo({top:0,behavior:'instant'});
+    if (['start','next','select','custom'].includes(action.type)) window.scrollTo({top:0,behavior:'instant'});
     return true;
   } catch(e) { toast(e.message); return false; }
 }
@@ -42,10 +42,15 @@ function foundation() {
 }
 function encounter() { return `<div class="stage-label">第 0 世代 · 相遇仪式</div><h2>用你们的语言，认识彼此。</h2><p class="description">从导师开始，按顺时针顺序，仅使用基础词语进行自我介绍。使用刚刚创造的“我”和“知道”。</p><div class="callout">检查：18 张纸条都已经写好发音和含义，并按发音首字母整理到公共词典区。</div><p class="muted">下一步由 ${esc(game.players[game.mentor])} 担任导师，私下抽取第一张知识卡。</p><div class="actions">${button('所有人已完成介绍 · 开始第一轮','start')}</div>`; }
 function secretGate() { return `<div class="stage-label">准备 · 导师私密选题</div><div class="secret-gate"><div class="secret-symbol" aria-hidden="true">◇</div><h2>请把设备交给<br>${esc(game.players[game.mentor])}</h2><p class="description">接下来只有导师查看卡牌。其他人请移开视线；选好题目后，屏幕会自动隐藏答案。</p>${button('我是导师 · 私下看题','reveal')}<p class="muted" style="margin-top:20px">第 ${game.generation} 世代 · 本轮可${game.turn.redrawn?'重抽已用':'重抽一次'}</p></div>`; }
+function customForm() {
+  const multiple=game.generation>=4;
+  return `<div class="row" style="justify-content:space-between"><div class="stage-label">仅导师可见 · 自定义知识</div>${button('立即隐藏','hide-secret',true)}</div><h2>给这张卡，一个自己的含义。</h2><p class="description">填写想让大家猜的知识，并选择猜对后获得的发展类型。发音仍在线下纸条上创造。</p><form id="custom-knowledge"><label class="field"><span>知识含义（最多 120 字）</span><textarea name="meaning" maxlength="120" rows="3" required placeholder="例如：萤火虫 / 发光"></textarea></label><fieldset class="custom-types"><legend>发展类型 · ${multiple?'可多选，每种获得 1 个标记':'请选择一种'}</legend>${TYPES.map((t,i)=>`<label class="type-choice"><input type="${multiple?'checkbox':'radio'}" name="customType${multiple?i:''}" value="${i}" ${multiple?'':'required'}><i class="type-mark" style="--mark:${COLORS[i]}"></i>${t}</label>`).join('')}</fieldset><div class="callout">本轮会计入当前世代进度。已抽出的卡会放回牌堆底部；自定义含义和类型会随本局存档保存。请根据当前世代选择合适的知识难度。</div><div class="actions"><button class="button" type="submit">使用这项知识 · 隐藏题目</button>${button('返回抽卡','cancel-custom',true,false,'type="button"')}</div></form>`;
+}
 function secretCards() {
+  if(customEditor && game.stage==='prepare') return customForm();
   const ready = game.stage !== 'prepare';
   const list = ready ? [game.turn.selected.card] : game.turn.candidates;
-  return `<div class="row" style="justify-content:space-between"><div class="stage-label">仅导师可见 · 请勿向其他人展示</div>${button('立即隐藏','hide-secret',true)}</div><h2>${ready?'本轮所选知识':'选择一项知识'}</h2><p class="description">${ready?'查看完毕后隐藏屏幕，继续用新语言解释。':'选择后，请在线下纸条上创造并写下一个新发音，暂不填写含义。'}</p><div class="cards">${list.map(id=>{const c=cards.find(c=>c.id===id);return `<section class="knowledge-card"><h3>世代 ${c.generation} / 知识卡 ${String(c.id).padStart(2,'0')}</h3>${c.entries.map((e,i)=>ready&&i!==game.turn.selected.entry?'':`<${ready?'div':'button'} class="knowledge-option" ${ready?'':`data-action="select" data-card="${id}" data-entry="${i}"`}><span><strong>${esc(e.text)}</strong><small>${esc(e.en)}</small></span><span class="icons">${e.icons.map(t=>TYPES[t]).join(' · ')}${ready?'':' →'}</span></${ready?'div':'button'}>`).join('')}</section>`;}).join('')}</div>${!ready?`<div class="actions">${button(game.turn.redrawn?'本轮重抽已使用':'重抽一次 · 两张中任选','redraw',true,game.turn.redrawn)}</div><p class="muted" style="margin-top:12px">未选的卡会放回本世代牌堆底部。每张卡只选一项知识。</p>`:''}`;
+  return `<div class="row" style="justify-content:space-between"><div class="stage-label">仅导师可见 · 请勿向其他人展示</div>${button('立即隐藏','hide-secret',true)}</div><h2>${ready?'本轮所选知识':'选择一项知识'}</h2><p class="description">${ready?'查看完毕后隐藏屏幕，继续用新语言解释。':'选择后，请在线下纸条上创造并写下一个新发音，暂不填写含义。'}</p><div class="cards">${list.map(id=>{const c=gameCards(game,cards).find(c=>c.id===id);return `<section class="knowledge-card"><h3>世代 ${c.generation} / 知识卡 ${typeof c.id==='number'?String(c.id).padStart(2,'0'):'自定义'}</h3>${c.entries.map((e,i)=>ready&&i!==game.turn.selected.entry?'':`<${ready?'div':'button'} class="knowledge-option" ${ready?'':`data-action="select" data-card="${id}" data-entry="${i}"`}><span><strong>${esc(e.text)}</strong><small>${esc(e.en)}</small></span><span class="icons">${e.icons.map(t=>TYPES[t]).join(' · ')}${ready?'':' →'}</span></${ready?'div':'button'}>`).join('')}</section>`;}).join('')}</div>${!ready?`<div class="actions">${button('自己创造知识','custom-editor',true)}${button(game.turn.redrawn?'本轮重抽已使用':'重抽一次 · 两张中任选','redraw',true,game.turn.redrawn)}</div><p class="muted" style="margin-top:12px">未选的卡会放回本世代牌堆底部。每张卡只选一项知识。</p>`:''}`;
 }
 function ready() { return `<div class="stage-label">准备 · 题目已隐藏</div><h2>把新发音，写在纸上。</h2><p class="description">导师写好发音后，向学生展示纸条。不要写含义。大家准备好后，点击开始启迪。</p><div class="callout">${game.generation<=2?'本世代导师可以配合手势说明。':'从第 3 世代起，导师不可以使用手势说明。'}启迪开始后只能使用新语言交流，学生正式作答时可以用旧语言说答案。</div><div class="actions">${button('已写好发音 · 开始启迪','enlighten')}${button('导师复看题目','reveal',true)}</div>`; }
 function enlighten() {
@@ -54,9 +59,9 @@ function enlighten() {
 function answering() { return `<div class="stage-label">启迪 · 第 ${game.turn.attempts} 次作答</div><h2>请说出，你理解的含义。</h2><p class="description">已消耗 1 个启迪标记。学生用旧语言说出答案，导师用新语言回应，再在这里记录判断。</p><div class="callout">由导师判断是否大致正确，不必逐字相同。若知识列出多个含义，答中任意一组即可。</div><div class="actions">${button('回答正确','correct')}${button('回答错误','incorrect',true)}</div><div class="toolbar"><button class="text-button" data-action="reveal">导师私下核对题目</button></div><p class="muted" style="margin-top:20px">${game.tokens===0?'这是最后一次作答；回答正确仍算成功。回答错误则本轮失败。':`回答错误后，仍可使用剩余 ${game.tokens} 个启迪标记。`}</p>`; }
 function rewards() { return `<h3>发展奖励 · 在纸上创造额外词语</h3><p class="muted">消耗 2 个同类标记，或 1 个奇迹标记。共同讨论含义，导师决定发音；可多次兑换。已用标记仍计分。</p>${TYPES.map((t,i)=>`<div class="reward-row"><span><i class="type-mark" style="--mark:${COLORS[i]}"></i>${t} · 可用 ${game.earned[i]-game.spent[i]}</span>${button(`用 ${i===4?1:2} 个换新词`,'reward',true,game.earned[i]-game.spent[i]<(i===4?1:2),`data-index="${i}"`)}</div>`).join('')}`; }
 function application() {
-  const c=cards.find(c=>c.id===game.turn.selected.card), e=c.entries[game.turn.selected.entry];
+  const c=gameCards(game,cards).find(c=>c.id===game.turn.selected.card), e=c.entries[game.turn.selected.entry];
   const advancing=game.used[game.generation-1]===LIMITS[game.generation-1];
-  return `<div class="stage-label">应用 · 现在可以使用旧语言</div><h2>${game.turn.success?'理解，让文明向前一步。':'这次没猜中，词语仍会留下。'}</h2><div class="answer-box"><div class="stage-label">${game.turn.success?'启迪成功':'启迪失败'} · 知识卡 ${c.id}</div><div class="answer">${esc(e.text)}</div><p class="muted">${esc(e.en)}</p>${game.turn.success?e.icons.map(i=>`<span class="badge">＋1 ${TYPES[i]}</span>`).join(''):'<span class="muted">本轮未获得发展标记</span>'}</div><div class="callout">无论成败，请把上述含义全部补写到本轮词语纸条上，再按发音索引放回词典。</div>${advancing?`<p class="muted">${game.generation===5?'第 5 世代已完成。处理完本轮纸条与奖励后，即可结算。':`第 ${game.generation} 世代已完成 ${LIMITS[game.generation-1]} 轮，剩余牌将移出游戏。下一轮进入第 ${game.generation+1} 世代。`}</p>`:''}${rewards()}<div class="actions">${button(game.generation===5?'纸条已整理 · 文明结算':'纸条已整理 · 交给下一位导师','next')}</div>`;
+  return `<div class="stage-label">应用 · 现在可以使用旧语言</div><h2>${game.turn.success?'理解，让文明向前一步。':'这次没猜中，词语仍会留下。'}</h2><div class="answer-box"><div class="stage-label">${game.turn.success?'启迪成功':'启迪失败'} · ${typeof c.id==='number'?'知识卡 '+c.id:'自定义知识'}</div><div class="answer">${esc(e.text)}</div><p class="muted">${esc(e.en)}</p>${game.turn.success?e.icons.map(i=>`<span class="badge">＋1 ${TYPES[i]}</span>`).join(''):'<span class="muted">本轮未获得发展标记</span>'}</div><div class="callout">无论成败，请把上述含义全部补写到本轮词语纸条上，再按发音索引放回词典。</div>${advancing?`<p class="muted">${game.generation===5?'第 5 世代已完成。处理完本轮纸条与奖励后，即可结算。':`第 ${game.generation} 世代已完成 ${LIMITS[game.generation-1]} 轮，剩余牌将移出游戏。下一轮进入第 ${game.generation+1} 世代。`}</p>`:''}${rewards()}<div class="actions">${button(game.generation===5?'纸条已整理 · 文明结算':'纸条已整理 · 交给下一位导师','next')}</div>`;
 }
 function finished() {
   const result=score(game.earned);
@@ -82,7 +87,7 @@ function rules() {
 }
 function history() {
   if(!game) return;
-  modal(`<div class="eyebrow">${esc(game.name)} · 文明历程</div><h2>每一次尝试，都留下了词语。</h2>${game.log.length?`<ol class="history-list">${game.log.map(l=>{const e=cards.find(c=>c.id===l.card).entries[l.entry];return `<li><span class="instruction-number">${String(l.round).padStart(2,'0')}</span><div><strong>${esc(e.text)}</strong><small>世代 ${l.generation} · 导师 ${esc(game.players[l.mentor])} · 作答 ${l.attempts} 次</small><small>提示：${l.hints.map((v,i)=>v?HINTS[i].name:null).filter(Boolean).join('、')||'未使用'}</small></div><span class="result">${l.success?'✓ 成功':'未猜中'}</span></li>`}).join('')}</ol>`:'<p class="muted">完成第一轮启迪后，记录会出现在这里。当前未揭晓的题目不会显示。</p>'}<p class="muted">已兑换 ${game.rewards} 次发展奖励。发音与词典保存在你们的纸条上。</p>`);
+  modal(`<div class="eyebrow">${esc(game.name)} · 文明历程</div><h2>每一次尝试，都留下了词语。</h2>${game.log.length?`<ol class="history-list">${game.log.map(l=>{const e=gameCards(game,cards).find(c=>c.id===l.card).entries[l.entry];return `<li><span class="instruction-number">${String(l.round).padStart(2,'0')}</span><div><strong>${esc(e.text)}</strong><small>世代 ${l.generation}${typeof l.card==='string'?' · 自定义知识':''} · 导师 ${esc(game.players[l.mentor])} · 作答 ${l.attempts} 次</small><small>提示：${l.hints.map((v,i)=>v?HINTS[i].name:null).filter(Boolean).join('、')||'未使用'}</small></div><span class="result">${l.success?'✓ 成功':'未猜中'}</span></li>`}).join('')}</ol>`:'<p class="muted">完成第一轮启迪后，记录会出现在这里。当前未揭晓的题目不会显示。</p>'}<p class="muted">已兑换 ${game.rewards} 次发展奖励。发音与词典保存在你们的纸条上。</p>`);
 }
 function exportGame() {
   if(!game) return;
@@ -101,6 +106,14 @@ function updateTimer() {
 }
 function confirmation(title, description, action, label='确认') { modal(`<h2>${title}</h2><p class="description">${description}</p><div class="actions">${button(label,action)}</div>`,'取消'); }
 $('#app').addEventListener('submit',e=>{
+  if(e.target.id==='custom-knowledge') {
+    e.preventDefault();
+    if (!privateView || game.stage !== 'prepare') return;
+    const f=new FormData(e.target);
+    const icons=game.generation<=3 ? (f.get('customType') == null ? [] : [Number(f.get('customType'))]) : TYPES.map((_,i)=>i).filter(i=>f.get(`customType${i}`));
+    run({type:'custom',text:f.get('meaning'),icons});
+    return;
+  }
   if(e.target.id!=='setup') return; e.preventDefault();
   const f=new FormData(e.target), count=Number(f.get('count'));
   const minutes=f.get('timer')==='custom'?Number(f.get('customMinutes')):Number(f.get('timer'));
@@ -133,7 +146,9 @@ document.addEventListener('click',e=>{
   else if(action==='import') $('#import-file').click();
   else if(action==='confirm-import' && pendingImport) {game=pendingImport;pendingImport=null;undo=[];privateView=false;home=false;resetTimer();save();closeModal();render();toast('存档已恢复，秘密题目保持隐藏。');}
   else if(action==='confirm-new' && pendingNew) { closeModal(); pendingNew();pendingNew=null; }
-  else if(action==='reveal') { privateView=true;render(); }
+  else if(action==='reveal') { privateView=true;customEditor=false;render(); }
+  else if(action==='custom-editor' && game.stage==='prepare' && privateView) { customEditor=true;render(); }
+  else if(action==='cancel-custom') { customEditor=false;render(); }
   else if(action==='hide-secret') { privateView=false;render(); }
   else if(action==='redraw') { if(run({type:'redraw'})) {privateView=true;render();} }
   else if(action==='select') run({type:'select',card:Number(b.dataset.card),entry:Number(b.dataset.entry)});

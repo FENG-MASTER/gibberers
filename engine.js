@@ -15,6 +15,10 @@ export function createGame(name, players, cards, minutes = 0) {
   return {version: 1, name: name.trim() || '未命名文明', players, created: new Date().toISOString(), stage: 'foundation', baseCount: 0, essentials: [false,false,false,false], mentor: 0, generation: 1, round: 1, used: [0,0,0,0,0], decks: [1,2,3,4,5].map(g => shuffle(cards.filter(c => c.generation === g).map(c => c.id))), tokens: 0, earned: [0,0,0,0,0], spent: [0,0,0,0,0], minutes, turn: null, log: [], rewards: 0};
 }
 function requireState(condition, message = '当前阶段不能进行此操作。') { if (!condition) throw Error(message); }
+export function gameCards(s, cards) { return [...cards, ...(s.customCards ?? [])]; }
+function validCustomEntry(entry, generation) {
+  return entry && typeof entry.text === 'string' && entry.text.trim().length > 0 && entry.text.length <= 120 && entry.en === '' && Array.isArray(entry.icons) && entry.icons.length >= 1 && entry.icons.length <= (generation <= 3 ? 1 : 5) && new Set(entry.icons).size === entry.icons.length && entry.icons.every(i => Number.isInteger(i) && i >= 0 && i < 5);
+}
 function prepare(s) {
   s.stage = 'prepare';
   s.tokens = Math.min(5, s.tokens + 6 - s.generation);
@@ -23,7 +27,7 @@ function prepare(s) {
   s.turn = {candidates: [id], selected: null, redrawn: false, hints: [false,false,false], auxiliary: false, attempts: 0, success: null, events: []};
 }
 function finishRound(s, cards, success) {
-  const card = cards.find(c => c.id === s.turn.selected.card);
+  const card = gameCards(s, cards).find(c => c.id === s.turn.selected.card);
   const entry = card.entries[s.turn.selected.entry];
   s.turn.success = success;
   if (success) for (const icon of entry.icons) s.earned[icon]++;
@@ -54,6 +58,19 @@ export function transition(state, action, cards) {
       requireState(s.stage === 'prepare' && s.turn.candidates.includes(action.card) && Number.isInteger(action.entry) && action.entry >= 0 && action.entry < 5);
       s.turn.selected = {card: action.card, entry: action.entry};
       for (const id of s.turn.candidates) if(id !== action.card) s.decks[s.generation - 1].push(id);
+      s.stage = 'ready'; break;
+    }
+    case 'custom': {
+      requireState(s.stage === 'prepare');
+      const entry = {text: typeof action.text === 'string' ? action.text.trim() : '', en: '', icons: action.icons};
+      requireState(validCustomEntry(entry, s.generation), '请填写 1～120 字的含义并选择类型。第 1～3 世代选一种，第 4～5 世代可多选。');
+      const id = `custom-${s.round}`;
+      s.customCards ??= [];
+      requireState(!s.customCards.some(c => c.id === id));
+      s.customCards.push({id, generation: s.generation, entries: [structuredClone(entry)]});
+      s.decks[s.generation-1].push(...s.turn.candidates);
+      s.turn.candidates = [id];
+      s.turn.selected = {card: id, entry: 0};
       s.stage = 'ready'; break;
     }
     case 'enlighten': requireState(s.stage === 'ready'); s.stage = 'enlighten'; break;
@@ -109,6 +126,9 @@ export function validateGame(s, cards) {
   requireState(stages.includes(s.stage) && int(s.mentor,0,s.players.length-1) && int(s.generation,1,5) && int(s.round,1,15) && int(s.tokens,0,5) && int(s.baseCount,0,18) && bools(s.essentials,4) && int(s.minutes,0,120) && int(s.rewards,0,100), '存档进度不正确。');
   requireState(five(s.used,5) && s.used.every((v,i) => v <= LIMITS[i]) && five(s.earned,100) && five(s.spent,100) && s.spent.every((v,i) => v <= s.earned[i]), '存档标记不正确。');
   requireState(Array.isArray(s.decks) && s.decks.length === 5 && s.decks.every((deck,i) => Array.isArray(deck) && new Set(deck).size === deck.length && deck.every(id => cards.some(c => c.id === id && c.generation === i+1))), '存档牌库不正确。');
+  const custom = s.customCards ?? [];
+  requireState(Array.isArray(custom) && custom.length <= 15 && new Set(custom.map(c => c?.id)).size === custom.length && custom.every(c => c && /^custom-([1-9]|1[0-5])$/.test(c.id) && int(c.generation,1,5) && Array.isArray(c.entries) && c.entries.length === 1 && validCustomEntry(c.entries[0],c.generation)), '存档自定义知识不正确。');
+  cards = gameCards(s, cards);
   requireState(Array.isArray(s.log) && s.log.length <= 15 && s.log.every(l => l && int(l.round,1,15) && int(l.generation,1,5) && int(l.mentor,0,s.players.length-1) && cards.some(c => c.id === l.card && c.generation === l.generation) && int(l.entry,0,4) && typeof l.success === 'boolean' && int(l.attempts,0,5) && bools(l.hints,3) && Array.isArray(l.events) && l.events.length <= 10 && l.events.every(e => typeof e === 'string' && e.length < 100)), '存档历史不正确。');
   const totalUsed = s.used.reduce((a,b) => a+b,0);
   const applied = ['application','finished'].includes(s.stage);
@@ -119,7 +139,7 @@ export function validateGame(s, cards) {
   const counted = [0,0,0,0,0];
   const usedCards = new Set();
   for (const [i,l] of s.log.entries()) {
-    requireState(l.round === i+1 && l.mentor === i % s.players.length && !usedCards.has(l.card), '存档历史顺序不正确。');
+    requireState(l.round === i+1 && l.mentor === i % s.players.length && !usedCards.has(l.card) && cards.find(c => c.id === l.card).entries[l.entry], '存档历史顺序不正确。');
     usedCards.add(l.card);
     if (l.success) for (const icon of cards.find(c => c.id === l.card).entries[l.entry].icons) counted[icon]++;
   }
@@ -128,7 +148,7 @@ export function validateGame(s, cards) {
   else {
     const t = s.turn;
     requireState(t && Array.isArray(t.candidates) && int(t.candidates.length,1,2) && new Set(t.candidates).size === t.candidates.length && t.candidates.every(id => cards.some(c => c.id === id && c.generation === s.generation)) && bools(t.hints,3) && typeof t.auxiliary === 'boolean' && typeof t.redrawn === 'boolean' && int(t.attempts,0,5) && [null,true,false].includes(t.success) && Array.isArray(t.events) && t.events.length <= 10 && t.events.every(e => typeof e === 'string' && e.length < 100), '存档回合不正确。');
-    if(s.stage !== 'prepare') requireState(t.selected && t.candidates.includes(t.selected.card) && int(t.selected.entry,0,4), '存档选题不正确。');
+    if(s.stage !== 'prepare') requireState(t.selected && t.candidates.includes(t.selected.card) && int(t.selected.entry,0,4) && cards.find(c => c.id === t.selected.card).entries[t.selected.entry], '存档选题不正确。');
     else requireState(t.selected === null);
   }
   return s;

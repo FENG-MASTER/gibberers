@@ -54,3 +54,18 @@ await click('confirm-import');assert.equal(saved().name,'来自备份');
 await element('import-file').emit('change',{target:{files:[{size:2000,text:async()=>'{}'}],value:'file'}});
 assert.equal(saved().name,'来自备份');assert.match(element('toast').textContent,/无法导入/);
 console.log('应用交互衔接通过：创建、基础词、私密选题、重抽、提示、撤销、15 轮、结算、第二局确认、导入与无效存档保护。');
+// 自定义知识通过同一张私密页面录入、隐藏、复看、揭晓并恢复存档。
+for(let i=0;i<18;i++)await click('base-plus');
+for(let i=0;i<4;i++)await click('essential',{index:String(i)});
+await click('encounter');await click('start');await click('reveal');
+assert.match(html(),/自己创造知识/);await click('custom-editor');assert.match(html(),/custom-knowledge/);
+await element('app').emit('submit',{target:{id:'custom-knowledge',values:{meaning:'<萤火虫> / 发光',customType:'3'}},preventDefault(){}});
+assert.equal(saved().stage,'ready');assert.doesNotMatch(html(),/萤火虫/);
+await click('reveal');assert.match(html(),/&lt;萤火虫&gt;/);assert.doesNotMatch(html(),/<萤火虫>/);
+await click('hide-secret');await click('enlighten');await click('attempt');await click('correct');
+assert.deepEqual(saved().earned,[0,0,0,1,0]);assert.match(html(),/自定义知识/);
+await click('history');assert.match(element('modal-content').innerHTML,/&lt;萤火虫&gt;/);await element('modal').close();
+const customSave=saved();await click('undo');await click('confirm-undo');assert.equal(saved().stage,'answer');
+await element('import-file').emit('change',{target:{files:[{size:5000,text:async()=>JSON.stringify({format:'gibberers-save',version:1,game:customSave})}],value:'file'}});
+await click('confirm-import');assert.equal(saved().stage,'application');assert.match(html(),/&lt;萤火虫&gt;/);
+console.log('自定义知识交互通过：私密填写、隐藏、复看、奖励、历史、撤销和存档恢复。');
